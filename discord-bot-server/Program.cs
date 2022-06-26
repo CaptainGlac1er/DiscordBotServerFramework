@@ -22,7 +22,8 @@ namespace DiscordBotServer
             {
                 LogLevel = LogSeverity.Verbose,
                 AlwaysDownloadUsers = true,
-                MessageCacheSize = 0
+                MessageCacheSize = 0,
+                GatewayIntents = GatewayIntents.AllUnprivileged
             });
             _commands = new CommandService(new CommandServiceConfig { CaseSensitiveCommands = false, ThrowOnError = true });
         }
@@ -68,6 +69,10 @@ namespace DiscordBotServer
             var pluginDir = new DirectoryInfo("./plugins");
             foreach (var plugin in pluginDir.GetFiles())
             {
+                if(!plugin.FullName.Contains(".dll")) {
+                    Console.WriteLine($"Did not load {plugin.FullName}");
+                    continue;
+                }
                 // Console.WriteLine($"checking file for services {plugin.FullName}");
                 var assembly = Assembly.LoadFile(plugin.FullName);
                 foreach (Type customType in assembly.GetTypes().Where(customType => customType.GetInterfaces().Contains(typeof(ICustomService))))
@@ -139,9 +144,13 @@ public class CommandHandler
         var pluginDir = new DirectoryInfo("./plugins");
         foreach(var plugin in pluginDir.GetFiles())
         {
+            if(!plugin.FullName.Contains(".dll")) {
+                Console.WriteLine($"Did not load {plugin.FullName}");
+                continue;
+            }
             // Console.WriteLine($"Checking file for modules {plugin.FullName}");
             var assembly = Assembly.LoadFile(plugin.FullName);
-            var adding = _commands.AddModulesAsync(assembly);
+            var adding = _commands.AddModulesAsync(assembly,_services);
             IEnumerable<ModuleInfo> stuff = await adding;
             foreach(var module in stuff)
             {
