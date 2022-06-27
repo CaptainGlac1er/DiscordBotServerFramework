@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using System.Linq;
 using GlacierByte.Discord.Server.Api;
+using Discord.Interactions;
 
 namespace DiscordBotServer
 {
@@ -26,36 +27,48 @@ namespace DiscordBotServer
                 GatewayIntents = GatewayIntents.AllUnprivileged
             });
             _commands = new CommandService(new CommandServiceConfig { CaseSensitiveCommands = false, ThrowOnError = true });
+            _interactions = new InteractionService(_client);
+            _serviceCollection = new ServiceCollection();
         }
         private readonly string Token;
         static void Main(string[] args)
         {
             var configDef = new { DiscordToken = "" };
             var config = JsonConvert.DeserializeAnonymousType(File.ReadAllText(@"./config/discord.json"), configDef);
-            Console.WriteLine(config.DiscordToken);
             new Program(config.DiscordToken).MainAsync().GetAwaiter().GetResult();
         }
 
         private readonly CommandService _commands;
+        private readonly InteractionService _interactions;
         private readonly DiscordSocketClient _client;
 
         private List<Type> CustomServices = new List<Type>();
 
+        private ServiceCollection _serviceCollection;
+
+        private IServiceProvider _serviceProvider;
+
         public async Task MainAsync()
         {
-            var sc = new ServiceCollection();
             LoadCustomServices();
-            sc = AddPluginServices(sc);
-            var services = BuildServiceProvider(sc);
-            services = CreateCustomServices(services);
-            await services.GetRequiredService<CommandHandler>().InitializeAsync();
+            _serviceCollection = AddPluginServices(_serviceCollection);
+            _serviceProvider = BuildServiceProvider(_serviceCollection);
+            _serviceProvider = CreateCustomServices(_serviceProvider);
+            await _serviceProvider.GetRequiredService<CommandHandler>().InitializeAsync();
+            await _serviceProvider.GetRequiredService<InteractionHandler>().InitializeAsync();
 
             _client.Log += Log;
             _client.MessageReceived += MessageReceived;
             _client.UserVoiceStateUpdated += _client_UserVoiceStateUpdated;
+            _client.Ready += Ready;
             await _client.LoginAsync(TokenType.Bot, Token);
             await _client.StartAsync();
             await Task.Delay(-1);
+        }
+
+        public async Task Ready() {
+            Console.WriteLine("Bot is ready");
+            await _serviceProvider.GetRequiredService<InteractionHandler>().InitCommands();
         }
 
         private Task _client_UserVoiceStateUpdated(SocketUser arg1, SocketVoiceState arg2, SocketVoiceState arg3)
@@ -107,7 +120,9 @@ namespace DiscordBotServer
         public IServiceProvider BuildServiceProvider(ServiceCollection sc) => 
             sc.AddSingleton(_client)
             .AddSingleton(_commands)
+            .AddSingleton(_interactions)
             .AddSingleton<CommandHandler>()
+            .AddSingleton<InteractionHandler>()
             .BuildServiceProvider();
 
         public Task Log (LogMessage msg)
@@ -123,54 +138,6 @@ namespace DiscordBotServer
             {
                 await message.Channel.SendMessageAsync("Pong!");
             }
-        }
-    }
-}
-public class CommandHandler
-{
-    private readonly DiscordSocketClient _client;
-    private readonly CommandService _commands;
-    private readonly IServiceProvider _services;
-
-    public CommandHandler(IServiceProvider services, CommandService commands, DiscordSocketClient client)
-    {
-        _commands = commands;
-        _services = services;
-        _client = client;
-    }
-
-    public async Task InitializeAsync()
-    {
-        var pluginDir = new DirectoryInfo("./plugins");
-        foreach(var plugin in pluginDir.GetFiles())
-        {
-            if(!plugin.FullName.Contains(".dll")) {
-                Console.WriteLine($"Did not load {plugin.FullName}");
-                continue;
-            }
-            // Console.WriteLine($"Checking file for modules {plugin.FullName}");
-            var assembly = Assembly.LoadFile(plugin.FullName);
-            var adding = _commands.AddModulesAsync(assembly,_services);
-            IEnumerable<ModuleInfo> stuff = await adding;
-            foreach(var module in stuff)
-            {
-                Console.WriteLine($"adding Module {module.Name}");
-            }
-        }
-         _client.MessageReceived += HandleCommandAsync;
-    }
-
-    public async Task HandleCommandAsync(SocketMessage msg)
-    {
-        if (!(msg is SocketUserMessage message)) return;
-        if (message.Content.Length > 0 && message.Content.StartsWith("`"))
-        {
-            Console.WriteLine($"'{message.Content}' read as a command");
-            var result = await _commands.ExecuteAsync(
-                context: new SocketCommandContext(_client, message),
-                argPos: 1,
-                services: _services);
-
         }
     }
 }
