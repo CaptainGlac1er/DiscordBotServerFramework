@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <Reference Include="discord-bot-server-api">
-      <HintPath>..\..\discord-bot-server-api\discord-bot-server-api\bin\Debug\net6.0\discord-bot-server-api.dll</HintPath>
+      <HintPath>..\..\discord-bot-server-api\bin\Debug\net6.0\discord-bot-server-api.dll</HintPath>
     </Reference>
     <Reference Include="System">
       <HintPath>System</HintPath>
@@ -30,7 +30,7 @@
     <None Update="config\discord.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="plugins\discord-sample-plugin.dll">
+    <None Update="plugins\*.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="plugins\TvRoomPlugin.dll">

@@ -16,9 +16,9 @@ namespace DiscordBotServer
 {
     class Program
     {
-        public Program(string token)
+        public Program(dynamic config)
         {
-            Token = token;
+            Token = config.DiscordToken;
             _client = new DiscordSocketClient(new DiscordSocketConfig
             {
                 LogLevel = LogSeverity.Verbose,
@@ -35,20 +35,20 @@ namespace DiscordBotServer
         {
             var configDef = new { DiscordToken = "" };
             var config = JsonConvert.DeserializeAnonymousType(File.ReadAllText(@"./config/discord.json"), configDef);
-            new Program(config.DiscordToken).MainAsync().GetAwaiter().GetResult();
+            new Program(config).MainAsync(config).GetAwaiter().GetResult();
         }
 
         private readonly CommandService _commands;
         private readonly InteractionService _interactions;
         private readonly DiscordSocketClient _client;
 
-        private List<Type> CustomServices = new List<Type>();
+        private Dictionary<Type, Type> CustomServices = new Dictionary<Type, Type>();
 
         private ServiceCollection _serviceCollection;
 
         private IServiceProvider _serviceProvider;
 
-        public async Task MainAsync()
+        public async Task MainAsync(dynamic config)
         {
             LoadCustomServices();
             _serviceCollection = AddPluginServices(_serviceCollection);
@@ -79,6 +79,26 @@ namespace DiscordBotServer
 
         public void LoadCustomServices()
         {
+            var typeProcessor = new Dictionary<Type, Delegate> {
+                { 
+                    typeof(ICustomService), new Action<Type>(service => {
+                            if(!CustomServices.ContainsKey(service)) {
+                                Console.WriteLine($"0. Adding Interface {service}");
+                                CustomServices.Add(service, service);
+                            }
+                        }
+                    )
+                },
+                { 
+                    typeof(ISharedService), new Action<Type>(service => {
+                            if(!CustomServices.ContainsKey(service)) {
+                                Console.WriteLine($"0. Adding Interface {service}");
+                                CustomServices.Add(service, service);
+                            }
+                        }
+                    )
+                }
+            };
             var pluginDir = new DirectoryInfo("./plugins");
             foreach (var plugin in pluginDir.GetFiles())
             {
@@ -88,29 +108,36 @@ namespace DiscordBotServer
                 }
                 // Console.WriteLine($"checking file for services {plugin.FullName}");
                 var assembly = Assembly.LoadFile(plugin.FullName);
-                foreach (Type customType in assembly.GetTypes().Where(customType => customType.GetInterfaces().Contains(typeof(ICustomService))))
+
+                foreach (Type customType in assembly.ExportedTypes)
                 {
-                    Console.WriteLine($"Added Service {customType.FullName}");
-                    CustomServices.Add(customType);
+                    foreach (var typeInterface in customType.GetInterfaces()) {
+                        Console.WriteLine($"0. Checking Interface {typeInterface}");
+                        if(typeProcessor.ContainsKey(typeInterface)) {
+                            typeProcessor[typeInterface].DynamicInvoke(customType);
+                        }
+                    }
                 }
 
             }
         }
         public ServiceCollection AddPluginServices(ServiceCollection input)
         {
-            foreach (Type customService in CustomServices)
+            foreach (Type customService in CustomServices.Values)
             {
+                Console.WriteLine($"1. Adding Service {customService}");
                 input.AddSingleton(customService);
-                Console.WriteLine($"1. {customService.Namespace} {customService.Name}");
+                Console.WriteLine($"1. Finished Adding Service {customService.Namespace} {customService.Name}");
             }
             return input;
         }
         public IServiceProvider CreateCustomServices(IServiceProvider sp)
         {
-            foreach (Type customService in CustomServices)
+            foreach (Type customService in CustomServices.Values)
             {
+                Console.WriteLine($"2. Creating Service {customService}");
                 var service = sp.GetService(customService);
-                Console.WriteLine($"2. {customService.Namespace} {customService.Name}");
+                Console.WriteLine($"2. Finished Creating Service {customService.Namespace} {customService.Name}");
             }
             return sp;
         }
@@ -123,6 +150,7 @@ namespace DiscordBotServer
             .AddSingleton(_interactions)
             .AddSingleton<CommandHandler>()
             .AddSingleton<InteractionHandler>()
+            .AddSingleton<LongTermFileService>(di => new LongTermFileService("data"))
             .BuildServiceProvider();
 
         public Task Log (LogMessage msg)
