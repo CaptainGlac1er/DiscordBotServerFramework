@@ -19,24 +19,8 @@ public class CommandHandler
         _client = client;
     }
 
-    public async Task InitializeAsync()
+    public void InitializeAsync()
     {
-        var pluginDir = new DirectoryInfo("./plugins");
-        foreach(var plugin in pluginDir.GetFiles())
-        {
-            if(!plugin.FullName.Contains(".dll")) {
-                Console.WriteLine($"Did not load {plugin.FullName}");
-                continue;
-            }
-            // Console.WriteLine($"Checking file for modules {plugin.FullName}");
-            var assembly = Assembly.LoadFile(plugin.FullName);
-            var adding = _commands.AddModulesAsync(assembly,_services);
-            IEnumerable<ModuleInfo> stuff = await adding;
-            foreach(var module in stuff)
-            {
-                Console.WriteLine($"adding Module {module.Name}");
-            }
-        }
          _client.MessageReceived += HandleCommandAsync;
     }
 

@@ -28,7 +28,7 @@ namespace DiscordBotServer
             });
             _commands = new CommandService(new CommandServiceConfig { CaseSensitiveCommands = false, ThrowOnError = true });
             _interactions = new InteractionService(_client);
-            _serviceCollection = new ServiceCollection();
+            CustomPluginService = new PluginService($"{AppDomain.CurrentDomain.BaseDirectory}\\plugins");
         }
         private readonly string Token;
         static void Main(string[] args)
@@ -42,20 +42,10 @@ namespace DiscordBotServer
         private readonly InteractionService _interactions;
         private readonly DiscordSocketClient _client;
 
-        private Dictionary<Type, Type> CustomServices = new Dictionary<Type, Type>();
-
-        private ServiceCollection _serviceCollection;
-
-        private IServiceProvider _serviceProvider;
+        private readonly PluginService CustomPluginService; 
 
         public async Task MainAsync(dynamic config)
         {
-            LoadCustomServices();
-            _serviceCollection = AddPluginServices(_serviceCollection);
-            _serviceProvider = BuildServiceProvider(_serviceCollection);
-            _serviceProvider = CreateCustomServices(_serviceProvider);
-            await _serviceProvider.GetRequiredService<CommandHandler>().InitializeAsync();
-            await _serviceProvider.GetRequiredService<InteractionHandler>().InitializeAsync();
 
             _client.Log += Log;
             _client.MessageReceived += MessageReceived;
@@ -68,7 +58,7 @@ namespace DiscordBotServer
 
         public async Task Ready() {
             Console.WriteLine("Bot is ready");
-            await _serviceProvider.GetRequiredService<InteractionHandler>().InitCommands();
+            LoadCustomServices();
         }
 
         private Task _client_UserVoiceStateUpdated(SocketUser arg1, SocketVoiceState arg2, SocketVoiceState arg3)
@@ -79,7 +69,9 @@ namespace DiscordBotServer
 
         public void LoadCustomServices()
         {
-            var typeProcessor = new Dictionary<Type, Delegate> {
+            CustomPluginService.PluginUpdate += PluginsLoaded;
+            CustomPluginService.StartListeningToPluginFolder();
+            /*var typeProcessor = new Dictionary<Type, Delegate> {
                 { 
                     typeof(ICustomService), new Action<Type>(service => {
                             if(!CustomServices.ContainsKey(service)) {
@@ -119,28 +111,40 @@ namespace DiscordBotServer
                     }
                 }
 
-            }
+            }*/
         }
-        public ServiceCollection AddPluginServices(ServiceCollection input)
+
+        private async void PluginsLoaded(object sender, ServiceCollection sc)
         {
-            foreach (Type customService in CustomServices.Values)
-            {
-                Console.WriteLine($"1. Adding Service {customService}");
-                input.AddSingleton(customService);
-                Console.WriteLine($"1. Finished Adding Service {customService.Namespace} {customService.Name}");
-            }
-            return input;
+            var serviceProvider = BuildServiceProvider(sc);
+            await CustomPluginService.LoadDiscordCommands(serviceProvider, _commands);
+            await CustomPluginService.LoadDiscordInteractions(serviceProvider, _interactions);
+            serviceProvider.GetRequiredService<CommandHandler>().InitializeAsync();
+            await serviceProvider.GetRequiredService<InteractionHandler>().InitializeAsync();
+
+            await serviceProvider.GetRequiredService<InteractionHandler>().InitCommands();
         }
-        public IServiceProvider CreateCustomServices(IServiceProvider sp)
-        {
-            foreach (Type customService in CustomServices.Values)
-            {
-                Console.WriteLine($"2. Creating Service {customService}");
-                var service = sp.GetService(customService);
-                Console.WriteLine($"2. Finished Creating Service {customService.Namespace} {customService.Name}");
-            }
-            return sp;
-        }
+
+        /* public ServiceCollection AddPluginServices(ServiceCollection input)
+{
+    foreach (Type customService in CustomServices.Values)
+    {
+        Console.WriteLine($"1. Adding Service {customService}");
+        input.AddSingleton(customService);
+        Console.WriteLine($"1. Finished Adding Service {customService.Namespace} {customService.Name}");
+    }
+    return input;
+}
+public IServiceProvider CreateCustomServices(IServiceProvider sp)
+{
+    foreach (Type customService in CustomServices.Values)
+    {
+        Console.WriteLine($"2. Creating Service {customService}");
+        var service = sp.GetService(customService);
+        Console.WriteLine($"2. Finished Creating Service {customService.Namespace} {customService.Name}");
+    }
+    return sp;
+}*/
 
 
 

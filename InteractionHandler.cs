@@ -20,7 +20,7 @@ public class InteractionHandler {
 
     public async Task InitializeAsync()
     {
-        var pluginDir = new DirectoryInfo("./plugins");
+        /*var pluginDir = new DirectoryInfo("./plugins");
         foreach(var plugin in pluginDir.GetFiles())
         {
             if(!plugin.FullName.Contains(".dll")) {
@@ -35,7 +35,7 @@ public class InteractionHandler {
             {
                 Console.WriteLine($"adding Interaction Module {module.Name}");
             }
-        }
+        }*/
          _client.InteractionCreated += HandleInteractionAsync;
     }
 
@@ -52,7 +52,11 @@ public class InteractionHandler {
 
     public async Task InitCommands() {
         foreach (var guild in _client.Guilds) {
+            try {
             await  _interaction.RegisterCommandsToGuildAsync(guild.Id);
+            } catch (InvalidOperationException exception) {
+                Console.WriteLine(exception.Message);
+            }
         }
     }
 }
