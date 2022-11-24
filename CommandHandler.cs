@@ -1,7 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
 using System.Threading.Tasks;
 using Discord.Commands;
 using Discord.WebSocket;
@@ -21,7 +18,7 @@ public class CommandHandler
 
     public void InitializeAsync()
     {
-         _client.MessageReceived += HandleCommandAsync;
+        _client.MessageReceived += HandleCommandAsync;
     }
 
     public async Task HandleCommandAsync(SocketMessage msg)
@@ -34,7 +31,6 @@ public class CommandHandler
                 context: new SocketCommandContext(_client, message),
                 argPos: 1,
                 services: _services);
-
         }
     }
 }
